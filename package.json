@@ -1,0 +1,25 @@
+{
+  "name": "upload-bigfile-demo",
+  "version": "1.0.0",
+  "description": "实现思路：",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/diandianyezi/upload-bigfile-demo.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/diandianyezi/upload-bigfile-demo/issues"
+  },
+  "homepage": "https://github.com/diandianyezi/upload-bigfile-demo#readme",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.2.2",
+    "multiparty": "^4.2.2"
+  }
+}

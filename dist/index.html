@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>文件上传示例</title>
+    <script src="https://cdn.bootcdn.net/ajax/libs/axios/0.24.0/axios.min.js"></script>
+  </head>
+  <body>
+    <input type="file" name="file-uploader" id="uploader" />
+    <button id="upload-btn">上传</button>
+  </body>
+  <script>
+    axios.defaults.baseUrl = "http://localhost:3000";
+
+    var file = null;
+    // 选择文件
+    document.getElementById("uploader").onchange = function ({
+      target: { files },
+    }) {
+      file = files[0];
+    };
+    // 开始上传
+    document.getElementById("upload-btn").onclick = async function () {
+      if (!file) return;
+
+      // 创建切片
+      let size = 1024 * 50; // 50k 切片大小
+      let fileChunks = [];
+      let index = 0; // 切片序号
+      for (let cur = 0; cur < file.size; cur += size) {
+        fileChunks.push({
+          hash: index++,
+          chunk: file.slice(cur, cur + size),
+        });
+      }
+
+      // 上传切片
+      // 这里需要控制下 请求的并发，防止浏览器内存溢出 使用Promise.race() 和异步函数
+      // ----- 这部分改为并发 ------
+      // const uploadList = fileChunks.map((item,index) => {
+      //   let formData = new FormData()
+      //   formData.append('filename', file.name)
+      //   formData.append('hash', item.hash)
+      //   formData.append('chunk', item.chunk)
+
+      //   return axios({
+      //     method: 'post',
+      //     url: '/upload',
+      //     data: formData
+      //   })
+      // })
+
+      // await Promise.all(uploadList)
+      // ---------------------------
+      // let pool = []
+      // let max = 3
+
+      // for(let i = 0; i < fileChunks.length; i++) {
+      //   let item = fileChunks[i]
+      //   let formData = new FormData()
+      //   formData.append('filename', file.name)
+      //   formData.append('hash', item.hash)
+      //   formData.append('chunk', item.chunk)
+
+      //   let task = axios({
+      //     method: 'post',
+      //     url: '/upload',
+      //     data: formData
+      //   })
+
+      //   task.then(data => {
+      //     // 请求结束后 将任务从pool中移除
+      //     let index = pool.findIndex(t => t === task)
+      //     pool.splice(index)
+      //   })
+      //   pool.push(task)
+
+      //   if(pool.length === max) {
+      //     // 每当线程池跑完一个任务，就再塞入一个任务
+      //     await Promise.race(pool)
+      //   }
+      // }
+
+      // ---------------------------
+
+      // 控制并发和断点续传
+      const uploadFileChunks = async function (list) {
+        if (list.length === 0) {
+          // 合并分片
+          await axios({
+            method: "get",
+            url: "/merge",
+            params: {
+              fileName: file.name,
+            },
+          });
+          console.info("上传完成");
+          return;
+        }
+
+        let pool = [];
+        let max = 3;
+        let finish = 0 // 完成数量
+        let failList = [] // 失败列表
+
+        for (let i = 0; i < fileChunks.length; i++) {
+          let item = fileChunks[i];
+          let formData = new FormData();
+          formData.append("filename", file.name);
+          formData.append("hash", item.hash);
+          formData.append("chunk", item.chunk);
+
+          let task = axios({
+            method: "POST",
+            url: "/upload",
+            data: formData,
+          });
+
+          task.then((data) => {
+            // 请求结束后 将任务从pool中移除
+            let index = pool.findIndex((t) => t === task);
+            pool.splice(index);
+          }).catch(() => {
+            failList.push(item)
+          }).finally(() => {
+            finish++
+            if(finish === list.length) {
+              uploadFileChunks(failList)
+            }
+          })
+          pool.push(task);
+
+          if (pool.length === max) {
+            // 每当线程池跑完一个任务，就再塞入一个任务
+            await Promise.race(pool);
+          }
+        }
+      };
+
+      uploadFileChunks(fileChunks)
+    };
+  </script>
+</html>
